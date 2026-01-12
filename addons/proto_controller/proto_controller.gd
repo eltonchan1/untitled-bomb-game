@@ -44,10 +44,21 @@ extends CharacterBody3D
 ## Name of Input Action to toggle freefly mode.
 @export var input_freefly : String = "fly"
 
+@export_group("Combat")
+## Bomb scene to throw
+@export var bomb_scene: PackedScene
+## How hard to throw bombs
+@export var throw_force: float = 15.0
+## Name of Input Action to throw bomb
+@export var input_throw: String = "throw_bomb"
+## Player ID (1 or 2)
+@export var player_id: int = 1
+
 var mouse_captured : bool = false
 var look_rotation : Vector2
 var move_speed : float = 0.0
 var freeflying : bool = false
+var damage_percent: float = 0.0
 
 ## IMPORTANT REFERENCES
 @onready var head: Node3D = $Head
@@ -115,6 +126,10 @@ func _physics_process(delta: float) -> void:
 		velocity.x = 0
 		velocity.y = 0
 	
+	# Throw bomb
+	if Input.is_action_just_pressed(input_throw):
+		throw_bomb()
+	
 	# Use velocity to actually move
 	move_and_slide()
 
@@ -176,3 +191,32 @@ func check_input_mappings():
 	if can_freefly and not InputMap.has_action(input_freefly):
 		push_error("Freefly disabled. No InputAction found for input_freefly: " + input_freefly)
 		can_freefly = false
+
+
+func throw_bomb():
+	if not bomb_scene:
+		return
+	
+	var bomb = bomb_scene.instantiate()
+	get_parent().add_child(bomb)
+	
+	# Spawn in front of camera/head
+	bomb.global_position = head.global_position + (-head.global_basis.z * 1.5)
+	
+	# Throw in direction camera is looking
+	var throw_direction = -head.global_basis.z
+	bomb.linear_velocity = throw_direction * throw_force
+
+
+func apply_knockback(direction: Vector3, base_force: float):
+	var knockback_multiplier = 1.0 + (damage_percent / 100.0)
+	velocity += direction * base_force * knockback_multiplier
+	damage_percent += 10.0
+
+func respawn():
+	var game_manager = get_node("/root/GameManager")
+	if game_manager:
+		game_manager.player_died(player_id)
+		global_position = game_manager.get_spawn_position(player_id)
+		velocity = Vector3.ZERO
+		damage_percent = 0.0
